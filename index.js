@@ -3,9 +3,11 @@
 
 const NILL = Symbol("NILL");
 
-const sexpr = (head, tail) => [head, (tail ? tail : NILL)];
 
-const atom = (x) => sexpr(x);
+
+const sexpr = (head, tail) => return new Map().set(head, tail);
+
+const atom = (x) => sexpr(x, NILL);
 
 const cons = sexpr;
 
@@ -17,25 +19,31 @@ const regexp$ = (x) => x instanceof RegExp;
 
 const array$ = (x) => Array.isArray(x);
 
-const object$ = (x) => !array$(x) && (x instanceof Object));
-
 const map$ = (x) => x instanceof Map;
 
 const symbol$ = (x) => x instanceof Symbol
 
 const set$ = (x) => x instanceof Set;
 
-const lambda$ = (x) => x instanceof Function;
+const object$ = (x) => !array$(x) && !$map(x) && (x instanceof Object);
 
-const label$ = (x) => string$(x) && (x in NS);
+
+const lambda$ = (x) => x instanceof Function;
 
 // atom [X] = atom [(X · NILL)] = T
 // atom [(X · A)] = F
 const atom$ = (x) => {
-  if (!array$(x)) return true;
-  let head = x[0],
-      tail = x.length > 1 ? x.slice(1) : null;
-  return (!tail || tail === NILL);};
+  if (string$(x) ||
+      number$(x) ||
+      regexp$(x) ||
+      array$(x) ||
+      set$(x) ||
+      symbol$(x) ||
+      set$(x) ||
+      object$(x)) return true;
+  if (map$(x)) return x.values()[0] === NILL;
+  throw new Error("Data type ${ typeof x } not supported.");};
+
 
 // eq$ [X; X] = T
 // eq$ [X; A] = F
@@ -44,15 +52,9 @@ const eq$ = (x, y) => !(!atom$(x) || !atom$(y)) ? undefined : (x[0] === y[0]);
 
 // car [(X · A)] = X
 // car [((X · A) · Y )] = (X · A
-const car = (x) => atom$(x) ? undefined : x[0];
+const car = (x) => atom$(x) ? undefined : x.keys()[0];
 
-const cdr = (x) => {
-  return atom$(x) ?
-          undefined :
-          x.length > 1 ?
-            1 in x ? x[1] :
-            undefined;};
-
+const cdr = (x) => atom$(x) ? undefined : x.values()[0];
 const caar = (x) => car(car(x));
 
 const cadr = (x) => car(cdr(x));
@@ -190,6 +192,8 @@ const LABEL = Symbol("LABEL");
 
 const COND = Symbol("COND");
 
+const label$ = (x) => string$(x) && (x in NS);
+
 const defn = (name, fn) => def(name, cons(LAMBDA, fn));
 
 const not = (x) => !x;
@@ -272,7 +276,12 @@ function apply(fn, ...args){
   return apply(evl(fn), ...args);
 }
 
-
+function evl(x){
+  let xcar = car(x),
+      xcdr = cdr(x);
+  if (x in NS) return ENV.get(NS[x]);
+  if(atom$(xcar))
+}
 
 
 
