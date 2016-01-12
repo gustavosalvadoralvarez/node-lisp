@@ -95,13 +95,8 @@ const equal$ = function eq$ual(x, y){
 // null[x] = atom[x] ∧ eq$[x; NIL]
 const nill$ = (x) => !(!atom$(x) || !eq$(tail(x), NILL) || empty$(x));
 
-const empty$ = (x) => !array$(x) || !x.length || nill$(x));
-
-
 const list = function (head, ...tail) {
-  return tail[0] === close ? head : cons(head, list(...tail));
-
-const close = Symbol(")");
+  return empty$(tail) ? head : cons(head, list(...tail));
 
 // append [x; y] = [null[x] → y;
 //                  T → cons [car [x];
