@@ -163,21 +163,139 @@ const pairlis = function pairlis(x, y, a){
             cons(cons(car(x), car(y)),
                  pairlis(cdr(x), cdr(y), a));};
 
-const quote = (x) => {
-  x.QUOTED = true;
-  return () => x;};
 
-const quote$ = (x) x && x.QUOTED;
+ // additional m expressions
+ const not = (x) => !x;
 
+ const T = () => true;
+
+ const F = () => false;
+
+ const and = function and(n, ...r){
+   return n && (empty$(r) ? true : and(...r));};
+
+ const or = function or(n, ...r){
+   return n || (empty$(r) ? false : or(...r));};
+
+ const xor = function xor(n, ...r){
+   return and(or(n, ...r), not(and(n, ...r)));
+
+ const sub = function sub(n, ...r){
+   return n - (empty$(r) ? 0 : sub(...r));};
+
+ const add = function add(n, ...r){
+   return n + (empty$(r) ? 0 : add(...r));};
+
+ const sub = function sub(n, ...r){
+   return n - (empty$(r) ? 0 : sub(...r));};
+
+ const mult = function mult(n, ...r){
+   return n * (empty$(r) ? 1 : mult(...r));};
+
+ const mod = (x, y) => x%y;
+
+ const exp = (x, y) => Math.pow(x, y);
+
+ const identity = (x) => () => x;
+
+// Name space and environment
 const ENV = new Map();
 
 const NS = {};
 
-const def = (label, x) => {
+const NS$ = (x) => (x in NS);
+
+const SNTX = {};
+
+const SNTX$ = (x) => (x in SNTX);
+
+const DTS = {};
+
+const DTS$ = (x) => (x in DTS);
+
+// define m expressions
+
+const define_syntax = (label, m) => {
   const sym = Symbol(label);
-  ENV.set(sym, x);
-  NS[label] = sym;
-  return null;};
+  ENV.set(sym, m);
+  SNTX[label] = sym;
+  return sym;
+};
+
+const type_constructor = (label, type_check, constructor_mexpr) => {
+  return (x) => {
+    if(type_check(x)) return cons(DM[label], constructor_mexpr(x));
+    interpreter_error("TYPE_ERROR: ${ label } TYPE CHECK FAILED");}};
+
+const define_data_type = (label,
+  type_check_mexpr=object$, constructor_mexpr=identity) => {
+  DTS[label] = define_syntax(label,
+                             type_constructor(label,
+                                              type_check_mexpr,
+                                              constructor_mexpr));};
+
+const set = (label, x) => {
+   const sym = Symbol(label);
+   ENV.set(sym, x);
+   NS[label] = sym;
+   return null;};
+
+const define_value = (label, typ, value){
+    if (!SNTX$(type)) throw new Error("Syntax not defined for ${ label }");
+    let sntx = SNTX[typ];
+    return set(label, cons(cons(LABEL, label),
+                           cons(sntx, ENV.get(sntx)(value)));};
+
+// errors (all interpreter errors thrown)
+
+const interpreter_error = (desc) => throw new Error("INTERPRETER ERROR: ${ desc }");
+
+
+// types
+
+const CORE_DATA_TYPES = {
+  number: {
+    type_check_mexpr: number$,
+    constructor_mexpr: identity },
+  string:: {
+    type_check_mexpr: string$,
+    constructor_mexpr: identity },
+  set: : {
+    type_check_mexpr: set$,
+    constructor_mexpr: (...args) => Set(args) },
+  array: : {
+    type_check_mexpr: array$,
+    constructor_mexpr: (...args) => args },
+  object: {
+    type_check_mexpr: object$,
+    constructor_mexpr: (...args) => {
+      let arity = args.length;
+      if(arity && arity%2 === 0) return args.reduce(
+        (ac, v, i, arr) => {
+          if (i%2) ac[v] = arr[i+1];
+          return ac; }, {});
+      interpreter_error("OBJECTS MUST HAVE EVEN ARITY");}},
+  lambda: {
+    type_check_mexpr: (x) => {
+      if (!aray$(x)) return false;
+      let [argsArr, body];
+      return array$(argsArr) $$ lambda$(body);
+    },
+    constructor_mexpr: (x) =>{
+      let [argsArr, body] = x;
+      return cons(argsArr, body);}},
+
+  symbol: symbol$
+};
+
+Object.keys(CORE_JS_DATA_TYPES).forEach(
+  (t) => define_data_type(t, CORE_JS_DATA_TYPES[t]));
+
+const lambda_constructor (body, )
+
+
+
+
 
 const LAMBDA = Symbol("LAMBDA");
 
@@ -187,36 +305,11 @@ const LABEL = Symbol("LABEL");
 
 const COND = Symbol("COND");
 
-const label$ = (x) => string$(x) && (x in NS);
+const STRING = Symbol("STRING");
 
-const defn = (name, fn) => def(name, cons(LAMBDA, fn));
+const NUMBER = Symbol("NUMBER");
 
-const not = (x) => !x;
-
-const and = function and(n, ...r){
-  return n && (empty$(r) ? true : and(...r));};
-
-const or = function or(n, ...r){
-  return n || (empty$(r) ? false : or(...r));};
-
-const xor = function xor(n, ...r){
-  return and(or(n, ...r), not(and(n, ...r)));
-
-const sub = function sub(n, ...r){
-  return n - (empty$(r) ? 0 : sub(...r));};
-
-const add = function add(n, ...r){
-  return n + (empty$(r) ? 0 : add(...r));};
-
-const sub = function sub(n, ...r){
-  return n - (empty$(r) ? 0 : sub(...r));};
-
-const mult = function mult(n, ...r){
-  return n * (empty$(r) ? 1 : mult(...r));};
-
-const mod = (x, y) => x%y;
-
-const exp = (x, y) => Math.pow(x, y);
+const REGEXP = Symbol("REGEXP");
 
 def("define", def);
 def("function", defn);
@@ -244,6 +337,19 @@ def("cons", (x) => cons(car(x), cadr(x)));
 def("car", (x) => caar(x));
 def("cdr", (x) => cdar(x));
 def("eq?", (x) => eq$(car(x), cadr(x)));
+def("number", (x) => {
+  if (number$(x)) return () => x;
+  throw new Error("Non-numerical argument passed to NUMBER");});
+def("string", (x) => {
+  if (string$(x)) return () => cons(STRING, x);
+  throw new Error("Non-character argument passed to STRING");});
+def("regexp", (x) => {
+  if (x instanceof RegExp) return () => x;
+  throw new Error("Non-RegExp argument passed to REGEXP");});
+def("array", (x) => {
+  if (x instanceof Number) return () => x;
+  throw new Error("Non-array argument passed to NUMBER");});
+
 def("string?", string$);
 def("number?", number$);
 def("regexp?", regexp$);
