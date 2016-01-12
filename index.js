@@ -254,6 +254,7 @@ def("map?", map$);
 def("symbol?", symbol$);
 def("set?", set$);
 def("lambda?", lambda$);
+def("function?", (x) => car(x) === LAMBDA && lambda$(cdr(x)))
 def("label?", label$);
 def("atom?", atom$);
 def("caar", caar);
@@ -263,23 +264,14 @@ def("caddr", caddr);
 def("list?", list$);
 
 
-function apply(fn, x, a){
-  let fncar = car(fn),
-      fncdr = cdr(fn);
-  return atom$(fn) ?
-          ((fncar in NS) ? ENV.get(NS[fncar]) : apply(evl(fn, a), x, a)) :
-        eq$(fncar, LAMBDA) ?
-          evl(cadder(fn), pairlis(cadr(fn), x, a))
-
-
-
-
-          fn(...args) : apply(car(fn), ...args)) :
-          (label$(fn))
-
+function apply(fn, ...args){
+  let fncar = car(fn);
+  if (lambda$(fn)) return fn(...args);
+  if (atom$(fn)) return apply(evl(fncar), ...args);
+  if (fncar === LAMBDA) return apply(cdr(fn), ...args);
+  return apply(evl(fn), ...args);
 }
 
-function evl()
 
 
 
