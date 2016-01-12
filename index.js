@@ -202,7 +202,7 @@ const DTS = {};
 
 const DTS$ = (x) => (x in DTS);
 
-// define m expressions
+// interpreter m expressions
 
 const define_syntax = (label, m) => {
   const sym = Symbol(label);
@@ -223,14 +223,11 @@ const define_value = (label, typ, value){
     return set(label, cons(cons(LABEL, label),
                            cons(sntx, ENV.get(sntx)(value)));};
 
-
 // errors (all interpreter errors thrown)
 
 const interpreter_error = (desc) => throw new Error("INTERPRETER ERROR: ${ desc }");
 
-
 // data types
-
 
 const list_constructor = function list_constructor(x, a){
   if (empty$(x)) return a;
@@ -239,28 +236,29 @@ const list_constructor = function list_constructor(x, a){
 const closure = (x) => () => x;
 
 const CORE_DATA_TYPES = list_constructor([
+  // reference types
   cons("number", cons(number$, closure)),
   cons("string", cons(string$, closure)),
   cons("symbol", cons(symbol$, closure)),
   cons("regexp", cons(regexp$, closure)),
   // collections
   cons("set", cons(set$, (...args) => closure(Set(args)))),
-  cons(array, cons(array$, (...args) => closure(args))),
-  cons(object, cons((...x) => x.length && x.length%2 === 0,
+  cons("array", cons(array$, (...args) => closure(args))),
+  cons("object", cons((...x) => x.length && x.length%2 === 0,
             (...args) => closure(
             args.reduce((ac, v, i, arr) => {
               if (i%2) ac[v] = arr[i+1];
               return ac; }, {})))),
   // lisp primitives
-  cons(lambda, cons((x) => lambda$,
+  cons("lambda", cons((x) => lambda$,
             (x) => closure(cons(
               (x.toString
                 .match(/\((.*)\)/)[1]
                 .split(",")
                 .map((y) => y.trim())),
               x)))),
-  cons(atom, cons(atom$, (x) => closure(atom(x)))),
-  cons(list, cons(array$, (x) => closure(list_constructor(x, NILL))))], NILL)
+  cons("atom", cons(atom$, (x) => closure(atom(x)))),
+  cons("list", cons(array$, (x) => closure(list_constructor(x, NILL))))], NILL)
 
 const type_constructor = (label, type_check, constructor_mexpr) => {
   return (x) => {
@@ -280,53 +278,4 @@ const define_data_types = function define_data_types(x){
   define_data_type(caar(x), cddr(x));
   return define_data_types(xcdr);};
 
-
-
-
-
-
-function apply(fn, ...args){
-  let fncar = car(fn);
-  if (lambda$(fn)) return fn(...args);
-  if (atom$(fn)) return apply(evl(fncar), ...args);
-  if (fncar === LAMBDA) return apply(cdr(fn), ...args);
-  return apply(evl(fn), ...args);}
-
-function evl(x){
-  let xcar = car(x),
-      xcdr = cdr(x);
-  if (x in NS) return ENV.get(NS[x]);
-  if(atom$(xcar))
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def("ff", ff);
-def("subst", subst);
-def("equal?", equal$);
-def("nill?", nill$);
-def("empty?", empty$);
-def("append", append);
-def("member?", member$);
-def("among?", among$);
-def("pair", pair);
-def("assoc", assoc);
-def("sub2", sub2);
-def("sublis", sublis);
-def("pairlis", pairlis);
-def("quote", quote);
-def("quote?", quote$);
+define_data_types(CORE_DATA_TYPES);
