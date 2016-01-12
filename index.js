@@ -211,17 +211,19 @@ const define_syntax = (label, m) => {
   return sym;
 };
 
+const eval_expr = function eval_syntax(expr, ...env){
+  let [λ, env] = [car(expr), cdr(expr)];
+  if(SNTX$(λ)) return eval_syntax(ENV.get(SNTX[λ]), ...env);
+  if(lambda$(λ)) return λ(...env);
+};
+
+
+
 const set = (label, x) => {
    const sym = Symbol(label);
    ENV.set(sym, x);
    NS[label] = sym;
    return null;};
-
-const define_value = (label, typ, value){
-    if (!DTS$(type)) throw new Error("Data Type not defined for ${ label }");
-    let sntx = DTS[typ];
-    return set(label, cons(cons(LABEL, label),
-                           cons(sntx, ENV.get(sntx)(value)));};
 
 // errors (all interpreter errors thrown)
 
@@ -241,6 +243,9 @@ const CORE_DATA_TYPES = list_constructor([
   cons("string", cons(string$, closure)),
   cons("symbol", cons(symbol$, closure)),
   cons("regexp", cons(regexp$, closure)),
+  cons("true", closure(true), closure(true)),
+  cons("false", closure(true), closure(false)),
+  cons("undefined", closure(true), closure(undefined)),
   // collections
   cons("set", cons(set$, (...args) => closure(Set(args)))),
   cons("array", cons(array$, (...args) => closure(args))),
@@ -258,7 +263,10 @@ const CORE_DATA_TYPES = list_constructor([
                 .map((y) => y.trim())),
               x)))),
   cons("atom", cons(atom$, (x) => closure(atom(x)))),
-  cons("list", cons(array$, (x) => closure(list_constructor(x, NILL))))], NILL)
+  cons("list", cons(array$, (x) => closure(list_constructor(x, NILL)))),
+  cons("quote", cons(() => true, closure)),
+  cons("label", string$, closure)],
+  NILL);
 
 const type_constructor = (label, type_check, constructor_mexpr) => {
   return (x) => {
@@ -277,5 +285,18 @@ const define_data_types = function define_data_types(x){
   if ($nill(xcar)) return null;
   define_data_type(caar(x), cddr(x));
   return define_data_types(xcdr);};
+
+const eval_data_value = (x) => {
+  let [t, v] = [car(x), cdr(x)];
+  if (!DTS$(t)) return interpreter_error(
+    "VALUE ERROR: DATA TYPE NOT DEFINED: ${ t }");
+  if(!lambda$(v)) return interpreter_error(
+    "VALUE ERROR: UNDECLARED VALUE: ${ v } \n"+
+    "VALUES MUST BE DECALRED WITH THE FORMS:\n\t"+
+    "[TYPE, VAL]\n\t"+
+    "(['QUOTE', VAL'])");
+  return v();
+};
+
 
 define_data_types(CORE_DATA_TYPES);
