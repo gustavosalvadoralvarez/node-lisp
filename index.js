@@ -2,7 +2,7 @@
 // jshint esnext:true
 
 
-const ENV = (() => {
+var ENV = (() => {
   let global_env = {}
   return {
     get: (sym) => {
@@ -12,89 +12,90 @@ const ENV = (() => {
       if (sym in global_env) global_env.concat(x);
       global_env[sym] = [x];
       return null;}
+    clear: (sym) => {
+      if (sym in global_env) ENV.set(sym, null);},
+    delete: (sym) => delete global_env[sym];
     };
   })();
 
 // <tag-symbol> := <symbol>
-const tag_symbol = (dict) => (tag) => tag in dict ? dict[tag] : false;
+var tag_symbol = (dict) => (tag) => tag in dict ? dict[tag] : false;
 
-const lookup_tag_symbol = (tag_symbol) => ENV.get(tag_symbol);
+var lookup_tag_symbol = (tag_symbol) => ENV.get(tag_symbol);
 
-const is_tag = (y) => (x) => x in Object.keys(y);
+var is_tag = (y) => (x) => x in Object.keys(y);
 
 // <variable> := "[" <lable-tag> "]"
-const NS = {};
+var NS = {};
 
-const is_NS_tag = is_tag(NS);
+var is_NS_tag = is_tag(NS);
 
-const NS_tag_symbol = tag_symbol(NS);
+var NS_tag_symbol = tag_symbol(NS);
 
 // <syntax> := "[" <syntax-tag> <expr>+ | <syntax-tag> <primitive>+ | <syntax-tag> "]"
-const SNTX = {};
+var SNTX = {};
 
-const is_SNTX_tag = is_tag(SNTX);
+var is_SNTX_tag = is_tag(SNTX);
 
-const SNTX_tag_symbol = tag_symbol(SNTX);
+var SNTX_tag_symbol = tag_symbol(SNTX);
 
 // <data-type> := "[" <data-tag> <exp>* | <data-tag> <primitive>* "]"
-const DTS = {};
+var DTS = {};
 
-const is_DTS_tag = is_tag(DTS);
+var is_DTS_tag = is_tag(DTS);
 
-const DTS_tag_symbol = tag_symbol(DTS);
+var DTS_tag_symbol = tag_symbol(DTS);
 
-const empty_exp$ = (x) => (undefined$(x) ||
+var empty_exp$ = (x) => (undefined$(x) ||
                            !car(x) || eq$(cdr(x), null) ||
                            !primitive$(x[0]));
 
-
-
 // errors (all interpreter errors thrown)
 
-const interpreter_error = (typ) => (
+var interpreter_error = (typ) => (
   (loc, desc) => throw new Error(
     "INTERPRETER ERROR: ${ typ } @ ${ loc } : ${ desc }"));
 
-const evaluation_error = interpreter_error("EVALUATION");
+var evaluation_error = interpreter_error("EVALUATION");
 
-const signature_error = interpreter_error("SIGNATURE");
+var signature_error = interpreter_error("SIGNATURE");
 
-const type_error = interpreter_error("TYPE");
+var type_error = interpreter_error("TYPE");
 
-const value_error = interpreter_error("VALUE");
+var value_error = interpreter_error("VALUE");
 
-const syntax_error = interpreter_error("SYNTAX");
+var syntax_error = interpreter_error("SYNTAX");
 
 // reference class identity m expressions (prototypal identity)
 
-const lambda$ = (x) => x.prototype === Function.prototype;
+var lambda$ = (x) => x.prototype === Function.prototype;
 
-const bool$ = (x) => x.prototype === Boolean.prototype;
+var bool$ = (x) => x.prototype === Boolean.prototype;
 
-const string$ = (x) => x.prototype === String.prototype;
+var string$ = (x) => x.prototype === String.prototype;
 
-const number$ = (x) => x.prototype === Number.prototype;
+var number$ = (x) => x.prototype === Number.prototype;
 
-const regexp$ = (x) => x.prototype === RegExp.prototype;
+var regexp$ = (x) => x.prototype === RegExp.prototype;
 
-const symbol$ = (x) => x.prototype === Symbol.prototype;
+var symbol$ = (x) => x.prototype === Symbol.prototype;
 
-const map$ = (x) => x.prototype === Map.prototype;
+var map$ = (x) => x.prototype === Map.prototype;
 
-const set$ = (x) => x.prototype === Set.prototype;
+var set$ = (x) => x.prototype === Set.prototype;
 
-const array$ = (x) => x.prototype === Array.prototype;
+var array$ = (x) => x.prototype === Array.prototype;
 
-const object$ = (x) => x.prototype === Object.prototype;
+var object$ = (x) => x.prototype === Object.prototype;
 
-const undefined$ = (x) => x === undefined;
+var undefined$ = (x) => x === undefined;
 
-const null$ = (x) => x === null;
+var null$ = (x) => x === null;
 
 // <primitive> := <boolean> | <number> | <string> |
 //                <reg-exp> | <symbol> | <set> |
 //                <object> | <undefined> | <null>
-const primitive$ = (x) => {
+var primitive$ = (x) => {
   if (string$(x)) return !Symbol.for(x);
   return regexp$(X) ||
          symbol$(X) ||
@@ -105,44 +106,53 @@ const primitive$ = (x) => {
 
 // primitive m expressions
 
-// <s-expression> := "[", <s-expression> | <atom> | <primitive>, [","
-//                      <s-expression> | <primitive>], "]"
-const sexpr = (head, tail) => [head].concat((tail || []))];
 
-// <atom> := "[" <primitive> ["," <null>] "]" | <primitive>
-const atom = (x) => [x];
-
-// <cons> := <s-expression>
-const cons = sexpr;
 
 // atom [X] = atom [(X · null)] = T
 // atom [(X · A)] = F
-const atom$ = (x) => {
+//
+
+// <atom> := "[" <primitive> ["," <null>] "]" | <primitive>
+
+var atomic_symbol = (x) => {
+  if (array$(x) && x.length) return x[0];
+  return x;};
+
+var atom$ = (x) => {
   if (array$(x)) return x.length < 2 || x[1] === null;
   if (primitive$(x)) return true;
   return false;};
 
+
+// <s-expression> := "[", <s-expression> | <atom> | <primitive>, [","
+//                      <s-expression> | <primitive>], "]"
+var sexp = (head, tail) => {
+  var exp = [head].concat((tail || null))];
+  exp[Symbol.toPrimitive] = () => evl(exp, []);
+  return exp};
+
+
 // eq$ [X; X] = T
 // eq$ [X; A] = F
 // eq$ [X; (X · A)] is undefined.
-const eq$ = (x, y) => !(!atom$(x) || !atom$(y)) ? undefined : (x[0] === y[0]);
+var eq$ = (x, y) => !(!atom$(x) || !atom$(y)) ? undefined : (x[0] === y[0]);
 
 // car [(X · A)] = X
 // car [((X · A) · Y )] = (X · A
-const car = (x) => atom$(x) ? undefined : x[0];
+var car = (x) => atom$(x) ? undefined : x[0];
 
-const cdr = (x) => atom$(x) ? undefined : x[1];
+var cdr = (x) => atom$(x) ? undefined : x[1];
 
-const caar = (x) => car(car(x));
+var caar = (x) => car(car(x));
 
-const cadr = (x) => car(cdr(x));
+var cadr = (x) => car(cdr(x));
 
-const caddr = (x) => car(cdr(cdr(x)));
+var caddr = (x) => car(cdr(cdr(x)));
 
-const cddr = (x) => cdr(cdr(x));
+var cddr = (x) => cdr(cdr(x));
 
 // ff[x] = [atom[x] → x; T → ff[car[x]]]
-const ff = function ff(x){
+var ff = function ff(x){
   return (atom$(x) ?
             x[0]:
             ff(car(x)))};
@@ -152,21 +162,21 @@ const ff = function ff(x){
 //                     T → z];
 //                    T →
 //                     cons [subst [x; y; car [z]]; subst [x; y; cdr [z]]]]
-// const subst = function subst(x, y, z){
+// var subst = function subst(x, y, z){
 //   return (atom$(z) ?
 //             (eq$(z, y) ? x : z) :
 //             cons(subst(x, y, car(z),
 //                subst(x, y, cdr(z)))))};
 // native tail-recursive implementation (for performance)
-const subst = function(x, y, z, w){
-    let c = w ? cons(z, w) : z; // reconstitution strategy
+var subst = function(x, y, z, w){
+    let c = w ? cons(z, w) : z; // revaritution strategy
     if (atom$(c)) return (eq$(c, y) ? x : z;
     return subst(x, y, car(c), cdr(c));}
 
 // eq$ual [x; y] = [atom [x] ∧ atom [y] ∧ eq$ [x; y]] ∨
 //                [¬ atom [x] ∧¬ atom [y] ∧ eq$ual [car [x]; car [y]] ∧
 //                 eq$ual [cdr [x]; cdr [y]]]
-const equal$ = function eq$ual(x, y){
+var equal$ = function eq$ual(x, y){
   return (atom$(x) && atom$(y) &&
           eq$(x, y)) ||
          (!atom$(x) && !atom$(y) &&
@@ -174,49 +184,49 @@ const equal$ = function eq$ual(x, y){
          equal(cdr(x), cdr(y)))};
 
 // null[x] = atom[x] ∧ eq$[x; NIL]
-const nill$ = (x) => !(!atom$(x) || !eq(x, null));
+var nill$ = (x) => !(!atom$(x) || !eq(x, null));
 
 // append [x; y] = [null[x] → y;
 //                  T → cons [car [x];
 //                            append [cdr [x]; y]]]
-// const append = function append(x, y){
+// var append = function append(x, y){
 //   return (nill$(x) ?
 //             y :
 //             cons(car(x),
 //                  append(cdr(x), y))))};
 // native tail recursive implementation for performance
-const rev = (x) => {
+var rev = (x) => {
   return reverse_list(cons(cdr(x), car(x)));
 // mutual recursion strategy
-const reverse_list = function reverse(x){
+var reverse_list = function reverse(x){
   if (!atom$(x)) return x;
   return reverse(cdr(x), rev(car(x)));}
-const append = (x, y) =>  {
+var append = (x, y) =>  {
   if(nill$(x)) return y;
   return reverse(cons(reverse(y), x));
 
 // member[x; y] = ¬null[y] ∧
 //               [eq$ual[x; car[y]] ∨
 //               member[x; cdr[y]]]
-const member$ = function(x, y){
+var member$ = function(x, y){
  return  !(nill$(y) || !equal$(x, car(y))) || member$(x, cdr(y));};
 
 // pair[x; y] = [null[x]∧null[y] → NIL;
 //               ¬atom[x]∧¬atom[y] → cons[list[car[x]; car[y]];
 //               pair[cdr[x]; cdr[y]]]
-// const pair = function pair(x, y){
+// var pair = function pair(x, y){
 //   return nill$(x) && nill$(y) ?
 //             null :
 //             !(!atom$(x) || !atom$(y)) ?
 //                 cons(list(car(x), car(y)) :
 //                      pair(cdr(x), cdr(y)))};
 // native tail recursive implementation
-const list_len = function list_len(x, y=0){
+var list_len = function list_len(x, y=0){
   return y + list_len(cdr(x));}
 
-const car_pair = (x, y) => cons(car(x), car(y));
+var car_pair = (x, y) => cons(car(x), car(y));
 
-const pair = function pair(x, y, z){
+var pair = function pair(x, y, z){
   if (nill$(x) && nill$(y)) return z;
   if (!z){
     let [len_x, len_y] = [list_len(x), list_len(y)];
@@ -228,7 +238,7 @@ const pair = function pair(x, y, z){
 
 // assoc[x; y] = eq$[caar[y]; x] → cadar[y];
 //               T → assoc[x; cdr[y]]]
-const assoc = function assoc(x, y){
+var assoc = function assoc(x, y){
   if (eq$(caar(y), x)) return cadar(y);
   return assoc(x, cdr(y));
 }]
@@ -236,7 +246,7 @@ const assoc = function assoc(x, y){
 // sub2[x; z] = [null[x] → z;
 //               eq$[caar[x]; z] → cadar[x];
 //              T → sub2[cdr[x]; z]]
-const sub2 = function(x, z){
+var sub2 = function(x, z){
   if (nill$(x)) return y;
   if (eq$(caar(x), z)) return cadar(x);
   return sub2(cdr(x), z);};
@@ -244,92 +254,81 @@ const sub2 = function(x, z){
 
 // sublis[x; y] = [atom[y] → sub2[x; y];
 //                T → cons[sublis[x; car[y]]; sublis[x; cdr[y]]]
-// const sublis = function sublis(x, y){
+// var sublis = function sublis(x, y){
 //   return atom$(y) ?
 //             sub2(x, y) :
 //             cons(sublis(x, car(y),
 //                  sublis(x, cdr(y))));};
 // native implementation
-const sub_car = (x, y) => sublis(x, car(y));
+var sub_car = (x, y) => sublis(x, car(y));
 
-const sub_cdr = (x, y) => sublis(x, cdr(y));
+var sub_cdr = (x, y) => sublis(x, cdr(y));
 
-const sublis = function sublis(x, y, z){
+var sublis = function sublis(x, y, z){
   let c = z ? cons(y, z) : y;
   if(atom$(c)) return sub2(x, c);
   return sublis(x, sub_car(x, c), sub_cdr(x, c));};
 
-const pairlis = function pairlis(x, y, a){
+var pairlis = function pairlis(x, y, a){
   return empty$(x) ?
             a :
             cons(cons(car(x), car(y)),
                  pairlis(cdr(x), cdr(y), a));};
 
-function pairlis
 // additional m expressions
 //
-const identity = (x) => x;
+var identity = (x) => x;
 
-const atomic_symbol = (x) => {
-  if (atom$(x)) return x[0];
-  return undefined;
-};
+var not = (x) => !x;
 
-const not = (x) => !x;
+var T = () => true;
 
-const T = () => true;
+var F = () => false;
 
-const F = () => false;
-
-const and = function and(n, ...r){
+var and = function and(n, ...r){
   return n && (empty$(r) ? true : and(...r));};
 
-const or = function or(n, ...r){
+var or = function or(n, ...r){
   return n || (empty$(r) ? false : or(...r));};
 
-const xor = function xor(n, ...r){
+var xor = function xor(n, ...r){
   return and(or(n, ...r), not(and(n, ...r)));
 
-const sub = function sub(n, ...r){
+var sub = function sub(n, ...r){
   return n - (empty$(r) ? 0 : sub(...r));};
 
-const add = function add(n, ...r){
+var add = function add(n, ...r){
   return n + (empty$(r) ? 0 : add(...r));};
 
-const sub = function sub(n, ...r){
+var sub = function sub(n, ...r){
   return n - (empty$(r) ? 0 : sub(...r));};
 
-const mult = function mult(n, ...r){
+var mult = function mult(n, ...r){
   return n * (empty$(r) ? 1 : mult(...r));};
 
-const mod = (x, y) => x%y;
+var mod = (x, y) => x%y;
 
-const exp = (x, y) => Math.pow(x, y);
+var exp = (x, y) => Math.pow(x, y);
 
-const empty$ = (x) => x.length === 0;
+var empty$ = (x) => x.length === 0;
 
-const array_to_list = function array_to_list(x, a){
+var array_to_list = function array_to_list(x, a){
   if(empty$(x)) return a;
   return array_to_list(x.slice(1), cons(a, x[0]));};
 
-const list = function list(...x){
+var list = function list(...x){
   return array_to_list(x.slice(1), x[0]);};
 
-const list_array = function list_array(x) {
+var list_array = function list_array(x) {
   if (atom$(x)) return symbolic_atom(x);
   return [ ...list_array(car(x)), ...list_array(cdr(x))];};
-
-
-const to_primitive = function(x){
-
-}
 
 // Name space, environment and evaluation
 
 // <exp-tag> := <string>
-const exp_tag = (x) => car(x);
+var exp_tag = (x) => car(x);
 
-const tagged_exp$ = (exp) => {
+var tagged_exp$ = (exp) => {
   if ($atom(exp) || nill$(exp)) return false;
   let tag = car(exp);
   return (string$(tag) &&
@@ -339,9 +338,9 @@ const tagged_exp$ = (exp) => {
             tag :
             false;}
 
-const lambda_exp$ = (x) => car(x) instanceof Function;
+var lambda_exp$ = (x) => car(x) instanceof Function;
 
-const missing$ = (x) => nill$(x) || undefined$(x);
+var missing$ = (x) => nill$(x) || undefined$(x);
 
 function evl(exp, env){
   if (primitive_exp$(exp)) return exp;
@@ -367,22 +366,25 @@ function evl(exp, env){
           SNTX_tag_symbol(exp)),
           tag,
           exp),
-      env);
-  }
-  if (list_exp$(exp)) return evl_list_form(exp, env);
-  if (atom$(exp)) return evl_atom(exp);
-  if (list$(exp)) return evl_list(exp);
+      env);}
+  if (list_exp$(exp)) return exp.toPrimitive("default");
+  if (atom$(exp)) return atomic_symbol(exp);
   if (lambda_exp$(exp)) return apply(exp, env);
-  if (missing$(exp)) return missing$(env) ?
-    interpreter_error("EVALUATION ERROR: MISSING EXP AND ENV") :
-    evl_env(env);
-};
+  if (missing$(exp)) {
+    if (missing$(env)) return interpreter_error(
+      "EVALUATION ERROR: MISSING EXP AND ENV");
+    return evl_env(env);}};
+
 
 function apply(exp, env){
-  return function (...args){
-    return x[0].apply(null, evl(null, env));
-  }
-}
+  let λ = atomic_symbol(exp);
+  if (!lambda$(λ)) return evaluation_error("APPLY",
+    "EXP MUST BE AN ATOMIC SYMBOL THAT EVALUATES TO A NATIVE FUNCTION");
+  let closure = (...args) => {
+    let bindings = evl(null, args);
+    return λ.apply(null, bindings);}
+  if (missing$(env)) return closure;
+  return closure(...env);};
 
 
 // interpreter m expressions
@@ -395,9 +397,9 @@ function apply(exp, env){
 
 
 
-const define_syntax = (label, mexp, evlexp
+var define_syntax = (label, mexp, evlexp
 /*(x, env) -> evl() || primitive || Attay*/) => {
-  const sym = Symbol(label);
+  var sym = Symbol(label);
   ENV.set(sym, mexp);
   SNTX[label] = sym;
   EVL.set(sym, evlexp);
@@ -406,27 +408,27 @@ const define_syntax = (label, mexp, evlexp
 
 // env is an array, dict implied by spread operator (lexical application)
 
-const type_constructor = (label, type_check, constructor_mexpr) => {
+var type_varructor = (label, type_check, varructor_mexpr) => {
   return (x) => {
-    if(type_check(x)) return cons(DTS[label], constructor_mexpr(x));
+    if(type_check(x)) return cons(DTS[label], varructor_mexpr(x));
     interpreter_error("TYPE_ERROR: ${ label } TYPE CHECK FAILED");}};
 
-const define_data_type = (x) => {
-  let [label, evlexp, type_check, constructor_mexp] = list_array(x);
+var define_data_type = (x) => {
+  let [label, evlexp, type_check, varructor_mexp] = list_array(x);
   DTS[label] = define_syntax(
                 label,
-                type_constructor(
-                  label, type_check, constructor_mexp),
+                type_varructor(
+                  label, type_check, varructor_mexp),
                 evlexp);};
 
-const define_data_types = function define_data_types(x){
+var define_data_types = function define_data_types(x){
   let [first, rest] = [car(x), cdr(x)];
   define_data_type(first);
   if (rest) return define_data_types(rest);};
 
-const evl_primitive = (x, env) => evl(false, env.concat(x));
+var evl_primitive = (x, env) => evl(false, env.concat(x));
 
-const tagged_list$ = (x) =>
+var tagged_list$ = (x) =>
 
 function evl(x, env=[]){
   if(primitive$(x)) return x;
@@ -436,28 +438,28 @@ function evl(x, env=[]){
 
 }
 
-const evl_atom = (x, env) => env.concat([evl(x.keys()[0], env));
+var evl_atom = (x, env) => env.concat([evl(x.keys()[0], env));
 
-const evl_list = function evl_list(x, env){
+var evl_list = function evl_list(x, env){
   if(!array$(env)) return interpreter_error(
     "IMPLEMENTATION ERROR: ENV MUST BE AN ARRAY");
   if(primitive$(x)) return evl_primitive(x, env);
   if(atom$(x)) return evl_
 
 }
-const _list_of_values = function _list_of_values(x, env){
+var _list_of_values = function _list_of_values(x, env){
   if (atom$(x)) return x.keys()[0];
   if (primitive$(x)) return
   return [ ...flatten(evl(car))]
 }
 
-const evl_list = function evl_list(x, env){
+var evl_list = function evl_list(x, env){
   if(!array$(env)) return interpreter_error(
     "IMPLEMENTATION ERROR: ENV MUST BE AN ARRAY");
   if(!x || nill$(x)) return env;
   return evl_list(cdr(x), env.concat(evl(car(x), env)));}
 
-const evl_operands = (x, env) => {
+var evl_operands = (x, env) => {
   if(!array$(env)) return interpreter_error(
     "IMPLEMENTATION ERROR: ENV MUST BE AN ARRAY");
   return evl_list(append(cdr(x), car(x)), env);}
@@ -476,8 +478,8 @@ function apply(λ, env){
   return λ(...env);
 }
 
-const set = (label, x) => {
-   const sym = Symbol(label);
+var set = (label, x) => {
+   var sym = Symbol(label);
    ENV.set(sym, x);
    NS[label] = sym;
    return null;};
@@ -487,21 +489,21 @@ const set = (label, x) => {
 // FORM: [DATA-TYPE-TAG, VALUE]
 
 
-const immutable_tagged_subform = (x) => () => x;
-const immutable_tagged_value = (x) => x[1]();
+var immutable_tagged_subform = (x) => () => x;
+var immutable_tagged_value = (x) => x[1]();
 
-const immutable_data_type = (name, type_check) => list()
-const tagged_subform = identity;
-const tagged_value = (x) => cdr(x)();
-
-
+var immutable_data_type = (name, type_check) => list()
+var tagged_subform = identity;
+var tagged_value = (x) => cdr(x)();
 
 
-const CORE_DATA_TYPES = list([
+
+
+var CORE_DATA_TYPES = list([
   //(LABEL,
   // SUBFORM -> evl -> VALUE,
   // VALUE -> BOOL,
-  // FORM -> type_constructor -> SUBFORM)
+  // FORM -> type_varructor -> SUBFORM)
   //
   // immutable reference types
   list(["number", immutable_tagged_value, number$, immutable_tagged_subform]),
@@ -529,7 +531,7 @@ const CORE_DATA_TYPES = list([
 
 
 
-const eval_data_value = (x) => {
+var eval_data_value = (x) => {
   let [t, v] = [car(x), cdr(x)];
   if (!DTS$(t)) return interpreter_error(
     "VALUE ERROR: DATA TYPE NOT DEFINED: ${ t }");
