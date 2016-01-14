@@ -1,6 +1,54 @@
 
 // jshint esnext:true
 
+
+const ENV = (() => {
+  let global_env = {}
+  return {
+    get: (sym) => {
+      if (sym in global_env) return car(global_env[sym])
+      return undefined},
+    set: (sym, x) => {
+      if (sym in global_env) global_env.concat(x);
+      global_env[sym] = [x];
+      return null;}
+    };
+  })();
+
+// <tag-symbol> := <symbol>
+const tag_symbol = (dict) => (tag) => tag in dict ? dict[tag] : false;
+
+const lookup_tag_symbol = (tag_symbol) => ENV.get(tag_symbol);
+
+const is_tag = (y) => (x) => x in Object.keys(y);
+
+// <variable> := "[" <lable-tag> "]"
+const NS = {};
+
+const is_NS_tag = is_tag(NS);
+
+const NS_tag_symbol = tag_symbol(NS);
+
+// <syntax> := "[" <syntax-tag> <expr>+ | <syntax-tag> <primitive>+ | <syntax-tag> "]"
+const SNTX = {};
+
+const is_SNTX_tag = is_tag(SNTX);
+
+const SNTX_tag_symbol = tag_symbol(SNTX);
+
+// <data-type> := "[" <data-tag> <exp>* | <data-tag> <primitive>* "]"
+const DTS = {};
+
+const is_DTS_tag = is_tag(DTS);
+
+const DTS_tag_symbol = tag_symbol(DTS);
+
+const empty_exp$ = (x) => (undefined$(x) ||
+                           !car(x) || eq$(cdr(x), null) ||
+                           !primitive$(x[0]));
+
+
+
 // errors (all interpreter errors thrown)
 
 const interpreter_error = (typ) => (
@@ -16,7 +64,6 @@ const type_error = interpreter_error("TYPE");
 const value_error = interpreter_error("VALUE");
 
 const syntax_error = interpreter_error("SYNTAX");
-
 
 // reference class identity m expressions (prototypal identity)
 
@@ -47,24 +94,25 @@ const null$ = (x) => x === null;
 // <primitive> := <boolean> | <number> | <string> |
 //                <reg-exp> | <symbol> | <set> |
 //                <object> | <undefined> | <null>
-const primitive$ = (x) => number$(X) ||
-                          string$(X) ||
-                          regexp$(X) ||
-                          symbol$(X) ||
-                          boolean$(X) ||
-                          undefined$(X) ||
-                          set$(X) ||
-                          object$(X);
+const primitive$ = (x) => {
+  if (string$(x)) return !Symbol.for(x);
+  return regexp$(X) ||
+         symbol$(X) ||
+         boolean$(X) ||
+         undefined$(X) ||
+         set$(X) ||
+         object$(X);};
 
 // primitive m expressions
 
-// <s-expression> := "[" <s-expression> | <atom> | <primitive> ","
-//                      [<s-expression> | <primitive>] "]"
+// <s-expression> := "[", <s-expression> | <atom> | <primitive>, [","
+//                      <s-expression> | <primitive>], "]"
 const sexpr = (head, tail) => [head].concat((tail || []))];
 
 // <atom> := "[" <primitive> ["," <null>] "]" | <primitive>
 const atom = (x) => [x];
 
+// <cons> := <s-expression>
 const cons = sexpr;
 
 // atom [X] = atom [(X · null)] = T
@@ -151,7 +199,7 @@ const append = (x, y) =>  {
 //               [eq$ual[x; car[y]] ∨
 //               member[x; cdr[y]]]
 const member$ = function(x, y){
- return  !(nill$(y) || !equal$(x, car(y))) || member$(x, cdr(y));}
+ return  !(nill$(y) || !equal$(x, car(y))) || member$(x, cdr(y));};
 
 // pair[x; y] = [null[x]∧null[y] → NIL;
 //               ¬atom[x]∧¬atom[y] → cons[list[car[x]; car[y]];
@@ -209,7 +257,7 @@ const sub_cdr = (x, y) => sublis(x, cdr(y));
 const sublis = function sublis(x, y, z){
   let c = z ? cons(y, z) : y;
   if(atom$(c)) return sub2(x, c);
-  return sublis(x, sub_car(x, c), sub_cdr(x, c));}
+  return sublis(x, sub_car(x, c), sub_cdr(x, c));};
 
 const pairlis = function pairlis(x, y, a){
   return empty$(x) ?
@@ -217,7 +265,7 @@ const pairlis = function pairlis(x, y, a){
             cons(cons(car(x), car(y)),
                  pairlis(cdr(x), cdr(y), a));};
 
-
+function pairlis
 // additional m expressions
 //
 const identity = (x) => x;
@@ -272,51 +320,11 @@ const list_array = function list_array(x) {
   return [ ...list_array(car(x)), ...list_array(cdr(x))];};
 
 
-const cond = function cond(x){
-  // FORM [[pred, ]]
+const to_primitive = function(x){
 
 }
 
-
-
-
-const proc_body = (x) => cdr(x);
-const proc_operator = (x) => car(x)
-const apply__proc = (x, env) => (
-  proc_operator(x).apply(null, evl(proc_body(x), env)));
-
-
-["LAMBDA", (x, y z) => (function(){
-  apply(cond, [apply(eq, [x, y]), z,x]);
-})()]
-
-
-
-["LAMBDA", ['x', 'y', 'z'], [
-  ['IF' ['=', 'x', 'y'],
-        'z'
-        'x']]][1, 2, 3]
-
-
-const first_item = (x) => x[0];
-
-const last_item = (x) => x.slice(-1)[0];
-
-
 // Name space, environment and evaluation
-
-const ENV = (() => {
-  let global_env = {}
-  return {
-    get: (sym) => {
-      if (sym in global_env) return last_item(global_env.get(sym));
-      return undefined},
-    set: (sym, x) => {
-      if (sym in global_env) global_env.concat(x);
-      global_env[sym] = [x];
-      return null;}
-    };
-  })();
 
 // <exp-tag> := <string>
 const exp_tag = (x) => car(x);
@@ -331,39 +339,9 @@ const tagged_exp$ = (exp) => {
             tag :
             false;}
 
-// <tag-symbol> := <symbol>
-const tag_symbol = (dict) => (tag) => tag in dict ? dict[tag] : false;
-
-const lookup_tag_symbol = (tag_symbol) => ENV.get(tag_symbol);
-
-const is_tag = (y) => (x) => x in Object.keys(y);
-
-// <variable> := "[" <lable-tag> "]"
-const NS = {};
-
-const is_NS_tag = is_tag(NS);
-
-const NS_tag_symbol = tag_symbol(NS);
-
-// <syntax> := "[" <syntax-tag> <expr>+ | <syntax-tag> <primitive>+ | <syntax-tag> "]"
-const SNTX = {};
-
-const is_SNTX_tag = is_tag(SNTX);
-
-const SNTX_tag_symbol = tag_symbol(SNTX);
-
-// <data-type> := "[" <data-tag> <exp>* | <data-tag> <primitive>* "]"
-const DTS = {};
-
-const is_DTS_tag = is_tag(DTS);
-
-const DTS_tag_symbol = tag_symbol(DTS);
-
-const empty_exp$ = (x) => (undefined$(x) ||
-                           !car(x) || eq$(cdr(x), null) ||
-                           !primitive$(x[0]));
-
 const lambda_exp$ = (x) => car(x) instanceof Function;
+
+const missing$ = (x) => nill$(x) || undefined$(x);
 
 function evl(exp, env){
   if (primitive_exp$(exp)) return exp;
@@ -393,15 +371,16 @@ function evl(exp, env){
   }
   if (list_exp$(exp)) return evl_list_form(exp, env);
   if (atom$(exp)) return evl_atom(exp);
+  if (list$(exp)) return evl_list(exp);
   if (lambda_exp$(exp)) return apply(exp, env);
-  if (empty_exp$(exp)) return empty_exp$(env) ?
-    interpreter_error("EVALUATION ERROR: EMPTY EXP AND ENV") :
+  if (missing$(exp)) return missing$(env) ?
+    interpreter_error("EVALUATION ERROR: MISSING EXP AND ENV") :
     evl_env(env);
 };
 
 function apply(exp, env){
   return function (...args){
-    return x[0].apply(null, evl([], env));
+    return x[0].apply(null, evl(null, env));
   }
 }
 
