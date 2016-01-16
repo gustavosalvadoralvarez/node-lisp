@@ -1,22 +1,59 @@
 
 // jshint esnext:true
 
+// errors (all interpreter errors thrown)
+var interpreter_error = (typ) => (
+  (loc, desc) => throw new Error(
+    "INTERPRETER ERROR: ${ typ } @ ${ loc } : ${ desc }"));
+
+var evaluation_error = interpreter_error("EVALUATION");
+
+var signature_error = interpreter_error("SIGNATURE");
+
+var type_error = interpreter_error("TYPE");
+
+var value_error = interpreter_error("VALUE");
+
+var syntax_error = interpreter_error("SYNTAX");
+
+var module_error = interpreter_error("MODULE");
+
 
 var ENV = (() => {
   let global_env = {}
   return {
     get: (sym) => {
-      if (sym in global_env) return car(global_env[sym])
-      return undefined},
+      if (sym in global_env) return car(global_env[sym]);
+      return undefined;},
     set: (sym, x) => {
       if (sym in global_env) global_env.concat(x);
       global_env[sym] = [x];
-      return null;}
+      return null;},
+    contains: (x) => (x in global_env);
     clear: (sym) => {
       if (sym in global_env) ENV.set(sym, null);},
-    delete: (sym) => delete global_env[sym];
-    };
-  })();
+    delete: (sym) => (delete global_env[sym]),
+    back: (sym, y) => {
+      if (sym in global_env) {
+        let value = ENV.get(sym),
+            ix = value.length - y;
+        if (ix > 0) return value[y];
+        return undefined;}
+      return undefined;}
+    },
+    export: () => {
+     let _module = {};
+     for (let k in global_env){
+       _module[k] = global_env[k];
+     }
+     return _module;
+   },
+    require: (x) => {
+      let _module = x.export();
+      if (_module || !(_module instanceof Object)) return module_error(
+        "ENV.require", "MODULE EXPORTS NOT FOUND");
+      for (let k in _module){
+        ENV.set(k, _module[k]);}}})();
 
 // <tag-symbol> := <symbol>
 var tag_symbol = (dict) => (tag) => tag in dict ? dict[tag] : false;
@@ -49,22 +86,6 @@ var DTS_tag_symbol = tag_symbol(DTS);
 var empty_exp$ = (x) => (undefined$(x) ||
                            !car(x) || eq$(cdr(x), null) ||
                            !primitive$(x[0]));
-
-// errors (all interpreter errors thrown)
-
-var interpreter_error = (typ) => (
-  (loc, desc) => throw new Error(
-    "INTERPRETER ERROR: ${ typ } @ ${ loc } : ${ desc }"));
-
-var evaluation_error = interpreter_error("EVALUATION");
-
-var signature_error = interpreter_error("SIGNATURE");
-
-var type_error = interpreter_error("TYPE");
-
-var value_error = interpreter_error("VALUE");
-
-var syntax_error = interpreter_error("SYNTAX");
 
 // reference class identity m expressions (prototypal identity)
 
@@ -128,9 +149,8 @@ var atom$ = (x) => {
 //                      <s-expression> | <primitive>], "]"
 var sexp = (head, tail) => {
   var exp = [head].concat((tail || null))];
-  exp[Symbol.toPrimitive] = () => evl(exp, []);
+  exp[Symbol.toPrimitive] = () => (env) => evl(exp, env);
   return exp};
-
 
 // eq$ [X; X] = T
 // eq$ [X; A] = F
@@ -152,10 +172,13 @@ var caddr = (x) => car(cdr(cdr(x)));
 var cddr = (x) => cdr(cdr(x));
 
 // ff[x] = [atom[x] → x; T → ff[car[x]]]
-var ff = function ff(x){
-  return (atom$(x) ?
-            x[0]:
-            ff(car(x)))};
+var first_primitive = function ff(x){
+  if (atom$(x)) return x[0];
+  return ff(car(x));};
+
+  var last_primitive = function ll(x){
+    if (atom$(x)) return x[0];
+    return ll(cdr(x));};
 
 // subst [x; y; z] = [atom [z] →
 //                     [eq$ [z; y] → x;
@@ -173,15 +196,15 @@ var subst = function(x, y, z, w){
     if (atom$(c)) return (eq$(c, y) ? x : z;
     return subst(x, y, car(c), cdr(c));}
 
-// eq$ual [x; y] = [atom [x] ∧ atom [y] ∧ eq$ [x; y]] ∨
+// equal [x; y] = [atom [x] ∧ atom [y] ∧ eq$ [x; y]] ∨
 //                [¬ atom [x] ∧¬ atom [y] ∧ eq$ual [car [x]; car [y]] ∧
 //                 eq$ual [cdr [x]; cdr [y]]]
-var equal$ = function eq$ual(x, y){
+var equal$ = function equal$(x, y){
   return (atom$(x) && atom$(y) &&
           eq$(x, y)) ||
          (!atom$(x) && !atom$(y) &&
-         equal(car(x), car(y)) &&
-         equal(cdr(x), cdr(y)))};
+         equal$(car(x), car(y)) &&
+         equal$(cdr(x), cdr(y)))};
 
 // null[x] = atom[x] ∧ eq$[x; NIL]
 var nill$ = (x) => !(!atom$(x) || !eq(x, null));
@@ -277,19 +300,20 @@ var pairlis = function pairlis(x, y, a){
 
 // additional m expressions
 //
+//
 var identity = (x) => x;
 
-var not = (x) => !x;
+var not = (x) => bool$(x) && !x || undefined;
 
-var T = () => true;
+var T = () =>  true;
 
 var F = () => false;
 
 var and = function and(n, ...r){
-  return n && (empty$(r) ? true : and(...r));};
+  return n && (r ? and(...r) : true);};
 
 var or = function or(n, ...r){
-  return n || (empty$(r) ? false : or(...r));};
+  return n || (r ? or(...r) : true);};
 
 var xor = function xor(n, ...r){
   return and(or(n, ...r), not(and(n, ...r)));
@@ -312,12 +336,18 @@ var exp = (x, y) => Math.pow(x, y);
 
 var empty$ = (x) => x.length === 0;
 
+var array_first_rest = (x) => return [x.slice(0, 1), x.slice(1)];
+
 var array_to_list = function array_to_list(x, a){
   if(empty$(x)) return a;
-  return array_to_list(x.slice(1), cons(a, x[0]));};
+  let [first, rest] = array_first_rest(x);
+  first.isList = true;
+  return array_to_list(rest, cons(a, first));};
 
 var list = function list(...x){
-  return array_to_list(x.slice(1), x[0]);};
+  let [first, rest] = array_first_rest(x);
+  first.isList = true;
+  return array_to_list(rest, first);};
 
 var list_array = function list_array(x) {
   if (atom$(x)) return symbolic_atom(x);
@@ -328,6 +358,10 @@ var list_array = function list_array(x) {
 // <exp-tag> := <string>
 var exp_tag = (x) => car(x);
 
+var env_exp$ = (x) => {
+  let tag = exp_tag(x);
+  return symbol$(tag) && ENV.contains(tag)};
+
 var tagged_exp$ = (exp) => {
   if ($atom(exp) || nill$(exp)) return false;
   let tag = car(exp);
@@ -336,40 +370,42 @@ var tagged_exp$ = (exp) => {
           in_keys(tag, SNTX) ||
           in_keys(DTS))) ?
             tag :
-            false;}
+            false;};
+
+var list_exp$ = (x) => x.isList || false;
 
 var lambda_exp$ = (x) => car(x) instanceof Function;
 
 var missing$ = (x) => nill$(x) || undefined$(x);
 
+var sub_tag = (exp, y) => return cons(y, cdr(x));
+
 function evl(exp, env){
   if (primitive_exp$(exp)) return exp;
+  if (atom$(exp)) return atomic_symbol(exp);
+  if (lambda_exp$(exp)) return apply(exp, env);
+  if (env_exp$(exp)) return evl(sub_tag(exp, lookup_tag_symbol(exp_tag(exp))));
   if (tagged_exp$(exp)) {
     let tag = exp_tag(exp);
     if (in_keys(SNTX)) return evl(
-      subst(
+      sub_tag(
         lookup_tag_symbol(
-          SNTX_tag_symbol(exp)),
-          tag,
+          SNTX_tag_symbol(exp))
           exp),
       env);
     if (in_keys(DTS)) return evl(
-      subst(
+      sub_tag(
         lookup_tag_symbol(
-          DTS_tag_symbol(exp)),
-          tag,
+          DTS_tag_symbol(exp))
           exp),
       env);
     if (in_keys(NS)) return evl(
-      subst(
+      sub_tag(
         lookup_tag_symbol(
-          SNTX_tag_symbol(exp)),
-          tag,
+          NS_tag_symbol(exp))
           exp),
       env);}
   if (list_exp$(exp)) return exp.toPrimitive("default");
-  if (atom$(exp)) return atomic_symbol(exp);
-  if (lambda_exp$(exp)) return apply(exp, env);
   if (missing$(exp)) {
     if (missing$(env)) return interpreter_error(
       "EVALUATION ERROR: MISSING EXP AND ENV");
@@ -380,11 +416,11 @@ function apply(exp, env){
   let λ = atomic_symbol(exp);
   if (!lambda$(λ)) return evaluation_error("APPLY",
     "EXP MUST BE AN ATOMIC SYMBOL THAT EVALUATES TO A NATIVE FUNCTION");
-  let closure = (...args) => {
+  let closure = (args) => {
     let bindings = evl(null, args);
     return λ.apply(null, bindings);}
   if (missing$(env)) return closure;
-  return closure(...env);};
+  return closure(env);};
 
 
 // interpreter m expressions
